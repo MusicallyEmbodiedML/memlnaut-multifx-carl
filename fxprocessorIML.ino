@@ -145,6 +145,14 @@ void bind_uart_in(std::shared_ptr<CURRENT_INTERFACE> &interface) {
     }
 }
 
+void bind_midi(std::shared_ptr<CURRENT_INTERFACE> &interface) {
+    if (midi_interf) {
+        midi_interf->SetCCCallback([interface] (uint8_t cc_number, uint8_t cc_value) {
+            Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
+        });
+    }
+}
+
 
 void setup()
 {
@@ -189,6 +197,8 @@ void setup()
     Serial.println("Bound interface to MEMLNaut.");
     bind_uart_in(interface);
     Serial.println("Bound interface to UART input.");
+    bind_midi(interface);
+    Serial.println("Bound interface to MIDI input.");
 
     WRITE_VOLATILE(core_0_ready, true);
     while (!READ_VOLATILE(core_1_ready)) {
