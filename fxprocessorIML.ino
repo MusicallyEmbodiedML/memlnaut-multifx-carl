@@ -3,6 +3,7 @@
 #include <memory>
 #include "src/memllib/interface/MIDIInOut.hpp"
 #include "src/memllib/PicoDefs.hpp"
+#include "src/memllib/interface/UARTInput.hpp"
 
 // Example apps and interfaces
 #include "src/memllib/examples/IMLInterface.hpp"
@@ -77,6 +78,7 @@ using CURRENT_INTERFACE = IMLInterface;
 std::shared_ptr<CURRENT_INTERFACE> interface;
 std::shared_ptr<CURRENT_AUDIO_APP> audio_app;
 std::shared_ptr<MIDIInOut> midi_interf;
+std::shared_ptr<UARTInput> uart_input;
 
 // Inter-core communication
 volatile bool core_0_ready = false;
@@ -84,12 +86,11 @@ volatile bool core_1_ready = false;
 volatile bool serial_ready = false;
 volatile bool interface_ready = false;
 
-
 // We're only bound to the joystick inputs (x, y, rotate)
 const size_t kN_InputParams = 3;
 
 
-void bind_interface(std::shared_ptr<CURRENT_INTERFACE> interface)
+void bind_interface(std::shared_ptr<CURRENT_INTERFACE> &interface)
 {
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([interface] () {
@@ -134,6 +135,16 @@ void bind_interface(std::shared_ptr<CURRENT_INTERFACE> interface)
     });
 }
 
+void bind_uart_in(std::shared_ptr<CURRENT_INTERFACE> &interface) {
+    if (uart_input) {
+        uart_input->SetCallback([interface] (const std::vector<float>& values) {
+            for (size_t i = 0; i < values.size(); ++i) {
+                interface->SetInput(kN_InputParams + i, values[i]);
+            }
+        });
+    }
+}
+
 
 void setup()
 {
@@ -155,11 +166,16 @@ void setup()
 
     delay(100); // Allow Serial2 to stabilize
 
+    // Setup UART input
+    const std::vector<size_t> listen_to_channels {0, 1};
+    uart_input = std::make_shared<UARTInput>(listen_to_channels);
+    const size_t total_input_params = kN_InputParams + listen_to_channels.size();
+
     // Setup interface with memory barrier protection
     {
         auto temp_interface = std::make_shared<CURRENT_INTERFACE>();
         MEMORY_BARRIER();
-        temp_interface->setup(kN_InputParams, CURRENT_AUDIO_APP::kN_Params);
+        temp_interface->setup(total_input_params, CURRENT_AUDIO_APP::kN_Params);
         MEMORY_BARRIER();
         temp_interface->SetMIDIInterface(midi_interf);
         MEMORY_BARRIER();
@@ -171,6 +187,8 @@ void setup()
     // Bind interface after ensuring it's fully initialized
     bind_interface(interface);
     Serial.println("Bound interface to MEMLNaut.");
+    bind_uart_in(interface);
+    Serial.println("Bound interface to UART input.");
 
     WRITE_VOLATILE(core_0_ready, true);
     while (!READ_VOLATILE(core_1_ready)) {
@@ -183,21 +201,46 @@ void setup()
 
 void loop()
 {
-    MEMORY_BARRIER();
-    MEMLNaut::Instance()->loop();
-    midi_interf->Poll();  // Only poll MIDI in core 0
-    MEMORY_BARRIER();
-    static int blip_counter = 0;
-    if (blip_counter++ > 100) {
-        blip_counter = 0;
-        Serial.println(".");
-        // Blink LED
-        digitalWrite(33, HIGH);
-    } else {
-        // Un-blink LED
-        digitalWrite(33, LOW);
+    static uint32_t last_1ms = 0;
+    static uint32_t last_10ms = 0;
+    uint32_t current_time = micros();
+
+    // Tasks to run as fast as possible
+    {
+        // Poll the UART input
+        uart_input->Poll();
+        // Poll the MIDI interface
+        midi_interf->Poll();
     }
-    delay(10); // Add a small delay to avoid flooding the serial output
+
+    // Tasks to run every 1ms
+    if (current_time - last_1ms >= 1000) {
+        last_1ms = current_time;
+
+        // None for now
+    }
+
+    // Tasks to run every 10ms
+    if (current_time - last_10ms >= 10000) {
+        last_10ms = current_time;
+
+        // Poll HAL
+        MEMORY_BARRIER();
+        MEMLNaut::Instance()->loop();
+        MEMORY_BARRIER();
+
+        // Blip
+        static int blip_counter = 0;
+        if (blip_counter++ > 100) {
+            blip_counter = 0;
+            Serial.println(".");
+            // Blink LED
+            digitalWrite(33, HIGH);
+        } else {
+            // Un-blink LED
+            digitalWrite(33, LOW);
+        }
+    }
 }
 
 void setup1()
