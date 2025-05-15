@@ -87,7 +87,7 @@ volatile bool serial_ready = false;
 volatile bool interface_ready = false;
 
 // We're only bound to the joystick inputs (x, y, rotate)
-const size_t kN_InputParams = 3;
+const size_t kN_InputParams = 0;
 
 
 void bind_interface(std::shared_ptr<CURRENT_INTERFACE> &interface)
@@ -108,16 +108,19 @@ void bind_interface(std::shared_ptr<CURRENT_INTERFACE> &interface)
         interface->SaveInput(state ? CURRENT_INTERFACE::STORE_VALUE_MODE : CURRENT_INTERFACE::STORE_POSITION_MODE);
     });
 
-    // Set up ADC callbacks
-    MEMLNaut::Instance()->setJoyXCallback([interface] (float value) {
-        interface->SetInput(0, value);
-    });
-    MEMLNaut::Instance()->setJoyYCallback([interface] (float value) {
-        interface->SetInput(1, value);
-    });
-    MEMLNaut::Instance()->setJoyZCallback([interface] (float value) {
-        interface->SetInput(2, value);
-    });
+    // Set up joystick callbacks
+    if (kN_InputParams > 0) {
+        MEMLNaut::Instance()->setJoyXCallback([interface] (float value) {
+            interface->SetInput(0, value);
+        });
+        MEMLNaut::Instance()->setJoyYCallback([interface] (float value) {
+            interface->SetInput(1, value);
+        });
+        MEMLNaut::Instance()->setJoyZCallback([interface] (float value) {
+            interface->SetInput(2, value);
+        });
+    }
+    // Set up other ADC callbacks
     MEMLNaut::Instance()->setRVZ1Callback([interface] (float value) {
         // Scale value from 0-1 range to 1-3000
         value = 1.0f + (value * 2999.0f);
