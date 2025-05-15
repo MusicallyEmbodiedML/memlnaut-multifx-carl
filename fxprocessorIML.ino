@@ -8,6 +8,8 @@
 // Example apps and interfaces
 #include "src/memllib/examples/IMLInterface.hpp"
 
+#include "src/memllib/hardware/memlnaut/Display.hpp"
+
 
 /**
  * @brief FX processor audio app
@@ -192,6 +194,7 @@ std::shared_ptr<CURRENT_INTERFACE> interface;
 std::shared_ptr<CURRENT_AUDIO_APP> audio_app;
 std::shared_ptr<MIDIInOut> midi_interf;
 std::shared_ptr<UARTInput> uart_input;
+std::shared_ptr<Display> display;
 
 // Inter-core communication
 volatile bool core_0_ready = false;
@@ -209,17 +212,32 @@ void bind_interface(std::shared_ptr<CURRENT_INTERFACE> &interface)
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([interface] () {
         interface->Randomise();
+        if (display) {
+            display->post("Randomised");
+        }
     });
     MEMLNaut::Instance()->setMomA2Callback([interface] () {
         interface->ClearData();
+        if (display) {
+            display->post("Dataset cleared");
+        }
     });
 
     // Set up toggle switch callbacks
     MEMLNaut::Instance()->setTogA1Callback([interface] (bool state) {
+        if (display) {
+            display->post(state ? "Training mode" : "Inference mode");
+        }
         interface->SetTrainingMode(state ? CURRENT_INTERFACE::TRAINING_MODE : CURRENT_INTERFACE::INFERENCE_MODE);
+        if (display && state == false) {
+            display->post("Model trained");
+        }
     });
     MEMLNaut::Instance()->setJoySWCallback([interface] (bool state) {
         interface->SaveInput(state ? CURRENT_INTERFACE::STORE_VALUE_MODE : CURRENT_INTERFACE::STORE_POSITION_MODE);
+        if (display) {
+            display->post(state ? "Where do you want it?" : "Here!");
+        }
     });
 
     // Set up joystick callbacks
@@ -281,6 +299,9 @@ void setup()
     // Setup board
     MEMLNaut::Initialize();
     pinMode(33, OUTPUT);
+    display = std::make_shared<Display>();
+    display->setup();
+    display->post("MEML FX Unit");
 
     // Move MIDI setup after Serial is confirmed ready
     Serial.println("Initializing MIDI...");
@@ -354,6 +375,11 @@ void loop()
         MEMORY_BARRIER();
         MEMLNaut::Instance()->loop();
         MEMORY_BARRIER();
+
+        // Refresh display
+        if (display) {
+            display->update();
+        }
 
         // Blip
         static int blip_counter = 0;
