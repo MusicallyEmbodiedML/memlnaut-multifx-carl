@@ -84,6 +84,12 @@ class PitchShifter
         del_size_ = SHIFT_BUFFER_SIZE;
         SetDelSize(del_size_);
         fun_ = 0.0f;
+
+        // Reset slewed_mod
+        for (size_t n = 0; n < 2; n++) {
+            slewed_mod_[n] = 0;
+            mod_coeff_[n] = 0;
+        }
     }
 
     /** process pitch shifter
