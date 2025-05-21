@@ -22,9 +22,22 @@
 #include "src/memllib/audio/AudioAppBase.hpp"
 #include "src/memllib/synth/OnePoleSmoother.hpp"
 
+static constexpr float shift_amount = -3.f;
+
+volatile float input_level = 0;
+
 class FXProcessorAudioApp : public AudioAppBase
 {
 public:
+    AudioDriver::codec_config_t GetDriverConfig() const override {
+        return {
+            .mic_input = true,
+            .line_level = 3,
+            .mic_gain_dB = 26,
+            .output_volume = 0.8f
+        };
+    }
+
     static constexpr size_t kN_Params = 7;
 
     FXProcessorAudioApp() : AudioAppBase(),
@@ -41,6 +54,7 @@ public:
 
     stereosample_t Process(const stereosample_t x) override
     {
+        WRITE_VOLATILE(input_level, std::abs(x.L) + std::abs(x.R));
         if (!setup_) {
             return { 0, 0 };
         }
@@ -52,16 +66,16 @@ public:
         float dry = y;
 
         y = pitchshifter_.Process(y);
-        yL = y + delay_line_1_.play(y,
+        yL = y /*+ delay_line_1_.play(y,
                                static_cast<size_t>(dl1_delay_time_),
-                               dl1_feedback_) * dl1_wet_;
-        yR = y + delay_line_2_.play(y,
+                               dl1_feedback_) * dl1_wet_*/;
+        yR = y /*+ delay_line_2_.play(y,
                                static_cast<size_t>(dl2_delay_time_),
-                               dl2_feedback_) * dl2_wet_;
+                               dl2_feedback_) * dl2_wet_*/;
 
         // Apply dry/wet mix
-        yL = 0.5f * yL + 0.5f * dry;
-        yR = 0.5f * yR + 0.5f * dry;
+        //yL = 0.5f * yL + 0.5f * dry;
+        //yR = 0.5f * yR + 0.5f * dry;
         stereosample_t ret { yL, yR };
         return ret;
     }
@@ -74,7 +88,7 @@ public:
         smoother_.SetTimeMs(0.1f);
         // Pitch Shifter:
         pitchshifter_.Init(sample_rate);
-        pitchshifter_.SetTransposition(0.f);
+        pitchshifter_.SetTransposition(shift_amount);
 
         // Setup finished
         setup_ = true;
@@ -162,8 +176,9 @@ protected:
         // Assign smoothed parameters to their functions
         // Pitch Shifter:
         // - transposition
-        float pitch_shift = LinearMap_(smoothed_params_[0], -12.f, 12.f);
-        pitchshifter_.SetTransposition(pitch_shift);
+        /*float pitch_shift = LinearMap_(smoothed_params_[0], -12.f, 12.f);
+        pitchshifter_.SetTransposition(pitch_shift);*/
+        pitchshifter_.SetTransposition(shift_amount);
         // Delay line 1:
         // - delay time
         dl1_delay_time_ = LinearMap_(smoothed_params_[1], 1.f,
@@ -265,8 +280,10 @@ void bind_interface(std::shared_ptr<CURRENT_INTERFACE> &interface)
     });
 
     MEMLNaut::Instance()->setRVGain1Callback([interface] (float value) {
-        AudioDriver::setDACVolume(value);
-        Serial.println(value*4);
+        //AudioDriver::setDACVolume(value);
+        //Serial.println(value*4);
+        Serial.println("ADCDAC bypassed!");
+        AudioDriver::setDACVolume(3.9f);
     });
 }
 
@@ -385,7 +402,8 @@ void loop()
         static int blip_counter = 0;
         if (blip_counter++ > 100) {
             blip_counter = 0;
-            Serial.println(".");
+            float local_input_level = READ_VOLATILE(input_level);
+            Serial.println(local_input_level);
             // Blink LED
             digitalWrite(33, HIGH);
         } else {
@@ -417,7 +435,7 @@ void setup1()
     }
 
     // Start audio driver
-    AudioDriver::Setup();
+    AudioDriver::Setup(audio_app->GetDriverConfig());
 
     WRITE_VOLATILE(core_1_ready, true);
     while (!READ_VOLATILE(core_0_ready)) {
