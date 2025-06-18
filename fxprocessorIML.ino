@@ -8,7 +8,7 @@
 // Example apps and interfaces
 #include "src/memllib/examples/IMLInterface.hpp"
 
-#include "src/memllib/hardware/memlnaut/Display.hpp"
+#include "src/memllib/hardware/memlnaut/display.hpp"
 
 
 /**
@@ -209,7 +209,7 @@ std::shared_ptr<CURRENT_INTERFACE> interface;
 std::shared_ptr<CURRENT_AUDIO_APP> audio_app;
 std::shared_ptr<MIDIInOut> midi_interf;
 std::shared_ptr<UARTInput> uart_input;
-std::shared_ptr<Display> display;
+std::shared_ptr<display> disp;
 
 // Inter-core communication
 volatile bool core_0_ready = false;
@@ -227,31 +227,31 @@ void bind_interface(std::shared_ptr<CURRENT_INTERFACE> &interface)
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([interface] () {
         interface->Randomise();
-        if (display) {
-            display->post("Randomised");
+        if (disp) {
+            disp->post("Randomised");
         }
     });
     MEMLNaut::Instance()->setMomA2Callback([interface] () {
         interface->ClearData();
-        if (display) {
-            display->post("Dataset cleared");
+        if (disp) {
+            disp->post("Dataset cleared");
         }
     });
 
     // Set up toggle switch callbacks
     MEMLNaut::Instance()->setTogA1Callback([interface] (bool state) {
-        if (display) {
-            display->post(state ? "Training mode" : "Inference mode");
+        if (disp) {
+            disp->post(state ? "Training mode" : "Inference mode");
         }
         interface->SetTrainingMode(state ? CURRENT_INTERFACE::TRAINING_MODE : CURRENT_INTERFACE::INFERENCE_MODE);
-        if (display && state == false) {
-            display->post("Model trained");
+        if (disp && state == false) {
+            disp->post("Model trained");
         }
     });
     MEMLNaut::Instance()->setJoySWCallback([interface] (bool state) {
         interface->SaveInput(state ? CURRENT_INTERFACE::STORE_VALUE_MODE : CURRENT_INTERFACE::STORE_POSITION_MODE);
-        if (display) {
-            display->post(state ? "Where do you want it?" : "Here!");
+        if (disp) {
+            disp->post(state ? "Where do you want it?" : "Here!");
         }
     });
 
@@ -289,9 +289,15 @@ void bind_interface(std::shared_ptr<CURRENT_INTERFACE> &interface)
 
 void bind_uart_in(std::shared_ptr<CURRENT_INTERFACE> &interface) {
     if (uart_input) {
-        uart_input->SetCallback([interface] (const std::vector<float>& values) {
-            for (size_t i = 0; i < values.size(); ++i) {
-                interface->SetInput(kN_InputParams + i, values[i]);
+        uart_input->SetCallback([interface] (size_t sensor_index, float value) {
+            // Find param index based on kSensorIndexes
+            auto it = std::find(kUARTListenInputs.begin(), kUARTListenInputs.end(), sensor_index);
+            if (it != kUARTListenInputs.end()) {
+                size_t param_index = std::distance(kUARTListenInputs.begin(), it);
+                Serial.printf("Sensor %zu: %f\n", sensor_index, value);
+                interface->SetInput(param_index, value);
+            } else {
+                Serial.printf("Invalid sensor index: %zu\n", sensor_index);
             }
         });
     }
@@ -316,9 +322,9 @@ void setup()
     // Setup board
     MEMLNaut::Initialize();
     pinMode(33, OUTPUT);
-    display = std::make_shared<Display>();
-    display->setup();
-    display->post("MEML FX Unit");
+    disp = std::make_shared<display>();
+    disp->setup();
+    disp->post("MEML FX Unit");
 
     // Move MIDI setup after Serial is confirmed ready
     Serial.println("Initializing MIDI...");
@@ -394,8 +400,8 @@ void loop()
         MEMORY_BARRIER();
 
         // Refresh display
-        if (display) {
-            display->update();
+        if (disp) {
+            disp->update();
         }
 
         // Blip
