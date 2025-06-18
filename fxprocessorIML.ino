@@ -222,89 +222,6 @@ const size_t kN_InputParams = 3;
 const std::vector<size_t> kUARTListenInputs {};
 
 
-void bind_interface(std::shared_ptr<CURRENT_INTERFACE> &interface)
-{
-    // Set up momentary switch callbacks
-    MEMLNaut::Instance()->setMomA1Callback([interface] () {
-        interface->Randomise();
-        if (disp) {
-            disp->post("Randomised");
-        }
-    });
-    MEMLNaut::Instance()->setMomA2Callback([interface] () {
-        interface->ClearData();
-        if (disp) {
-            disp->post("Dataset cleared");
-        }
-    });
-
-    // Set up toggle switch callbacks
-    MEMLNaut::Instance()->setTogA1Callback([interface] (bool state) {
-        if (disp) {
-            disp->post(state ? "Training mode" : "Inference mode");
-        }
-        interface->SetTrainingMode(state ? CURRENT_INTERFACE::TRAINING_MODE : CURRENT_INTERFACE::INFERENCE_MODE);
-        if (disp && state == false) {
-            disp->post("Model trained");
-        }
-    });
-    MEMLNaut::Instance()->setJoySWCallback([interface] (bool state) {
-        interface->SaveInput(state ? CURRENT_INTERFACE::STORE_VALUE_MODE : CURRENT_INTERFACE::STORE_POSITION_MODE);
-        if (disp) {
-            disp->post(state ? "Where do you want it?" : "Here!");
-        }
-    });
-
-    // Set up joystick callbacks
-    if (kN_InputParams > 0) {
-        MEMLNaut::Instance()->setJoyXCallback([interface] (float value) {
-            interface->SetInput(0, value);
-        });
-        MEMLNaut::Instance()->setJoyYCallback([interface] (float value) {
-            interface->SetInput(1, value);
-        });
-        MEMLNaut::Instance()->setJoyZCallback([interface] (float value) {
-            interface->SetInput(2, value);
-        });
-    }
-    // Set up other ADC callbacks
-    MEMLNaut::Instance()->setRVZ1Callback([interface] (float value) {
-        // Scale value from 0-1 range to 1-3000
-        value = 1.0f + (value * 2999.0f);
-        interface->SetIterations(static_cast<size_t>(value));
-    });
-
-    // Set up loop callback
-    MEMLNaut::Instance()->setLoopCallback([interface] () {
-        interface->ProcessInput();
-    });
-}
-
-void bind_uart_in(std::shared_ptr<CURRENT_INTERFACE> &interface) {
-    if (uart_input) {
-        uart_input->SetCallback([interface] (size_t sensor_index, float value) {
-            // Find param index based on kSensorIndexes
-            auto it = std::find(kUARTListenInputs.begin(), kUARTListenInputs.end(), sensor_index);
-            if (it != kUARTListenInputs.end()) {
-                size_t param_index = std::distance(kUARTListenInputs.begin(), it);
-                Serial.printf("Sensor %zu: %f\n", sensor_index, value);
-                interface->SetInput(param_index, value);
-            } else {
-                Serial.printf("Invalid sensor index: %zu\n", sensor_index);
-            }
-        });
-    }
-}
-
-void bind_midi(std::shared_ptr<CURRENT_INTERFACE> &interface) {
-    if (midi_interf) {
-        midi_interf->SetCCCallback([interface] (uint8_t cc_number, uint8_t cc_value) {
-            Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
-        });
-    }
-}
-
-
 void setup()
 {
     Serial.begin(115200);
@@ -336,7 +253,7 @@ void setup()
     {
         auto temp_interface = std::make_shared<CURRENT_INTERFACE>();
         MEMORY_BARRIER();
-        temp_interface->setup(total_input_params, CURRENT_AUDIO_APP::kN_Params);
+        temp_interface->setup(total_input_params, CURRENT_AUDIO_APP::kN_Params, disp);
         MEMORY_BARRIER();
         temp_interface->SetMIDIInterface(midi_interf);
         MEMORY_BARRIER();
@@ -346,11 +263,11 @@ void setup()
     WRITE_VOLATILE(interface_ready, true);
 
     // Bind interface after ensuring it's fully initialized
-    bind_interface(interface);
+    interface->bindInterface();
     Serial.println("Bound interface to MEMLNaut.");
-    bind_uart_in(interface);
+    interface->bindUARTInput(uart_input, kUARTListenInputs);
     Serial.println("Bound interface to UART input.");
-    bind_midi(interface);
+    interface->bindMIDI(midi_interf);
     Serial.println("Bound interface to MIDI input.");
 
     // Bind volume pot
