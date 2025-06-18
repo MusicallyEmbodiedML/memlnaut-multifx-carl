@@ -31,10 +31,10 @@ class FXProcessorAudioApp : public AudioAppBase
 public:
     AudioDriver::codec_config_t GetDriverConfig() const override {
         return {
-            .mic_input = true,
+            .mic_input = false,
             .line_level = 3,
-            .mic_gain_dB = 26,
-            .output_volume = 0.8f
+            .mic_gain_dB = 0,
+            .output_volume = 0.95f
         };
     }
 
