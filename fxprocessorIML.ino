@@ -6,7 +6,7 @@
 #include "src/memllib/interface/UARTInput.hpp"
 
 // Example apps and interfaces
-#include "src/memllib/examples/IMLInterface.hpp"
+#include "src/memllib/examples/InterfaceRL.hpp"
 
 #include "src/memllib/hardware/memlnaut/display.hpp"
 
@@ -204,7 +204,7 @@ protected:
 
 // Global objects
 using CURRENT_AUDIO_APP = FXProcessorAudioApp;
-using CURRENT_INTERFACE = IMLInterface;
+using CURRENT_INTERFACE = InterfaceRL;
 std::shared_ptr<CURRENT_INTERFACE> interface;
 std::shared_ptr<CURRENT_AUDIO_APP> audio_app;
 std::shared_ptr<MIDIInOut> midi_interf;
