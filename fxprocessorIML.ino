@@ -66,16 +66,16 @@ public:
         float dry = y;
 
         y = pitchshifter_.Process(y);
-        yL = y /*+ delay_line_1_.play(y,
+        yL = y + delay_line_1_.play(y,
                                static_cast<size_t>(dl1_delay_time_),
-                               dl1_feedback_) * dl1_wet_*/;
-        yR = y /*+ delay_line_2_.play(y,
+                               dl1_feedback_) * dl1_wet_;
+        yR = y + delay_line_2_.play(y,
                                static_cast<size_t>(dl2_delay_time_),
-                               dl2_feedback_) * dl2_wet_*/;
+                               dl2_feedback_) * dl2_wet_;
 
         // Apply dry/wet mix
-        //yL = 0.5f * yL + 0.5f * dry;
-        //yR = 0.5f * yR + 0.5f * dry;
+        yL = 0.5f * yL + 0.5f * dry;
+        yR = 0.5f * yR + 0.5f * dry;
         stereosample_t ret { yL, yR };
         return ret;
     }
@@ -176,9 +176,9 @@ protected:
         // Assign smoothed parameters to their functions
         // Pitch Shifter:
         // - transposition
-        /*float pitch_shift = LinearMap_(smoothed_params_[0], -12.f, 12.f);
-        pitchshifter_.SetTransposition(pitch_shift);*/
-        pitchshifter_.SetTransposition(shift_amount);
+        float pitch_shift = LinearMap_(smoothed_params_[0], -12.f, 12.f);
+        pitchshifter_.SetTransposition(pitch_shift);
+        //pitchshifter_.SetTransposition(shift_amount);
         // Delay line 1:
         // - delay time
         dl1_delay_time_ = LinearMap_(smoothed_params_[1], 1.f,
